@@ -1,3 +1,12 @@
+use bevy::prelude::*;
+
+pub mod boid;
+pub mod setup;
+
 fn main() {
-    println!("Hello, world!");
+    App::build()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(setup::SetupPlugin)
+        .add_plugin(boid::BoidPlugin)
+        .run();
 }
