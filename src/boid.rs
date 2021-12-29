@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 
+use rand::random;
+
 pub struct BoidPlugin;
 
 impl Plugin for BoidPlugin {
@@ -9,18 +11,26 @@ impl Plugin for BoidPlugin {
     }
 }
 
+#[derive(Clone, Copy)]
 pub struct Boid {
     vel: Vec2,
     accel: Vec2,
     vision: f32,
+    max_steering: f32,
+    max_speed: f32,
+    seperation_vision: f32,
 }
 
 impl Boid {
-    pub fn new(vision: f32) -> Self {
+    pub fn new() -> Self {
         Self {
-            vel: Vec2::new(1.0, 0.0),
+            vel: (Vec2::new(random::<f32>() - 0.5, random::<f32>() - 0.5) * 3.0)
+                .clamp_length_min(2.0),
             accel: Vec2::ZERO,
-            vision,
+            vision: 100.0,
+            max_steering: 0.2,
+            max_speed: 5.0,
+            seperation_vision: 75.0,
         }
     }
 }
@@ -50,17 +60,17 @@ fn update_boids(mut boids: Query<(&mut Boid, &mut Transform)>, window: Res<Windo
 
         let acceleration = boid.accel;
         boid.vel += acceleration;
+        boid.vel = boid.vel.clamp_length_max(boid.max_speed);
     }
 }
 
 fn collect_intersections<'a, T>(
-    boid: (&Boid, &Transform),
+    (boid, transform): (&Boid, &Transform),
     other_boids: T,
 ) -> Vec<(&'a Boid, &'a Transform)>
 where
     T: Iterator<Item = (&'a Boid, &'a Transform)>,
 {
-    let (boid, transform) = boid;
     let mut collected_boids = Vec::new();
 
     for (other_boid, other_transform) in other_boids {
@@ -76,42 +86,84 @@ where
     collected_boids
 }
 
-fn boid_behaviour_cohesion(boids_in_vision: &Vec<(&Boid, &Transform)>) -> Vec3 {
-    let mut avg_pos = Vec3::ZERO;
-
-    for (_, boid_pos) in boids_in_vision {
-        avg_pos += boid_pos.translation;
-    }
-
-    avg_pos / (boids_in_vision.len() as f32)
-}
-
-fn boid_behaviour_alignment(boids_in_vision: &Vec<(&Boid, &Transform)>) -> Vec3 {
-    let mut avg_direction = Vec3::ZERO;
+fn boid_behaviour_alignment(boids_in_vision: &Vec<(&Boid, &Transform)>) -> Vec2 {
+    let mut avg_direction = Vec2::ZERO;
 
     for (boid, _) in boids_in_vision {
-        avg_direction += boid.vel.extend(0.0);
+        avg_direction += boid.vel.normalize_or_zero();
     }
 
     avg_direction / (boids_in_vision.len() as f32)
 }
 
-fn boid_behaviour_seperation(boids_in_vision: &Vec<(&Boid, &Transform)>) -> Vec3 {
-    todo!("compute seperation force");
+fn boid_behaviour_cohesion(
+    boid_pos: &Transform,
+    boids_in_vision: &Vec<(&Boid, &Transform)>,
+) -> Vec2 {
+    let mut avg_pos = Vec3::ZERO;
+
+    for (_, boid_pos) in boids_in_vision {
+        avg_pos += boid_pos.translation;
+    }
+    avg_pos /= boids_in_vision.len() as f32;
+
+    (avg_pos - boid_pos.translation).truncate()
 }
 
-fn apply_steering_force(mut boid: &Boid, force: Vec2) {
-    todo!("apply steering to the boid");
+fn boid_behaviour_seperation(
+    (boid, boid_pos): (&Boid, &Transform),
+    boids_in_vision: &Vec<(&Boid, &Transform)>,
+) -> Vec2 {
+    let pos = boid_pos.translation;
+
+    let mut seperation_avg = Vec3::ZERO;
+    let mut cnt = 0;
+
+    for (_, other_boid_pos) in boids_in_vision {
+        let offset = other_boid_pos.translation - pos;
+        let len = offset.length();
+
+        if *other_boid_pos != boid_pos && len < boid.seperation_vision {
+            seperation_avg += -boid.vision * offset.normalize_or_zero() / len;
+            cnt += 1;
+        }
+    }
+    seperation_avg /= cnt as f32;
+
+    seperation_avg.truncate()
 }
 
-fn apply_all_boid_behaviours(mut boids: Query<(&Boid, &Transform)>) {
-    for boid in boids.iter() {
-        let boids_in_vision = collect_intersections((&boid.0, boid.1), boids.iter());
+fn apply_steering_force(boid: &mut Boid, force: Vec2) {
+    boid.accel +=
+        (force.normalize_or_zero() * boid.max_speed - boid.vel).clamp_length_max(boid.max_steering)
+}
 
-        let cohesion = boid_behaviour_cohesion(&boids_in_vision);
-        let alignment = boid_behaviour_alignment(&boids_in_vision);
-        //let seperation = boid_behaviour_seperation(&boids_in_vision);
+fn apply_all_boid_behaviours(mut boids: Query<(&mut Boid, &Transform)>) {
+    let mut boids_behaviours = Vec::new();
 
-        todo!("use the cohesion, alignment and seperation behaviours to apply steering");
+    let cloned_boids: Vec<_> = boids.iter_mut().map(|(b, t)| (*b, t)).collect();
+
+    for (boid, pos) in cloned_boids.iter() {
+        let boids_in_vision =
+            collect_intersections((boid, pos), cloned_boids.iter().map(|(b, t)| (b, *t)));
+
+        if boids_in_vision.len() > 1 {
+            let alignment = boid_behaviour_alignment(&boids_in_vision);
+            let cohesion = boid_behaviour_cohesion(pos, &boids_in_vision);
+            let seperation = boid_behaviour_seperation((boid, pos), &boids_in_vision);
+
+            boids_behaviours.push(Some([alignment, cohesion, seperation]));
+        } else {
+            boids_behaviours.push(None);
+        }
+    }
+
+    for ((mut boid, _), behaviours) in boids.iter_mut().zip(boids_behaviours.iter()) {
+        if let Some(behaviours) = behaviours {
+            boid.accel = Vec2::ZERO;
+            for behaviour in behaviours {
+                apply_steering_force(&mut boid, *behaviour);
+            }
+        }
     }
 }

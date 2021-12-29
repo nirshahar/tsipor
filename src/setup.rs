@@ -20,8 +20,9 @@ fn setup_assets(
     asset_server: Res<AssetServer>,
     mut texture_atlas_assets: ResMut<Assets<TextureAtlas>>,
 ) {
-    let handle: Handle<Texture> = asset_server.load("boid.png");
-    let boid_texture = TextureAtlas::from_grid(handle, Vec2::new(138.0, 152.0), 1, 1);
+    let handle: Handle<Texture> = asset_server.load("Untitled.png");
+    let boid_texture =
+        TextureAtlas::from_grid(handle, Vec2::new(21.0 /*138.0*/, 35.0 /*152.0*/), 1, 1);
     let boid_texture = texture_atlas_assets.add(boid_texture);
 
     commands.insert_resource(BoidTexture {
@@ -53,7 +54,7 @@ fn spawn_boid(
                     sprite: TextureAtlasSprite::new(0),
                     ..Default::default()
                 })
-                .insert(Boid::new(15.0));
+                .insert(Boid::new());
         }
     }
 }
