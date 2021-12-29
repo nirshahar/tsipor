@@ -1,6 +1,7 @@
 use bevy::prelude::*;
+use bevy_canvas::common_shapes::Polygon;
 
-use crate::boid::Boid;
+use crate::boid_behaviour::Boid;
 
 pub struct SetupPlugin;
 
@@ -46,15 +47,31 @@ fn spawn_boid(
             let transform =
                 Transform::from_xyz(pos.x - win.width() / 2.0, pos.y - win.height() / 2.0, 0.0);
 
+            let boid = Boid::new();
+
+            let mut drawing_points = Vec::new();
+            drawing_points
+                .push(pos - Vec2::new(boid.draw_base_size / 2.0, boid.draw_height_size / 2.0));
+            drawing_points
+                .push(pos - Vec2::new(-boid.draw_base_size / 2.0, boid.draw_height_size / 2.0));
+            drawing_points.push(pos - Vec2::new(0.0, -boid.draw_height_size / 2.0));
+
+            let boid_sprite = Polygon {
+                origin: Vec2::ZERO,
+                points: drawing_points,
+                closed: true,
+            };
             commands
                 .spawn()
-                .insert_bundle(SpriteSheetBundle {
-                    texture_atlas: boid_texture.texture.clone(),
-                    transform: transform,
-                    sprite: TextureAtlasSprite::new(0),
-                    ..Default::default()
-                })
-                .insert(Boid::new());
+                // .insert_bundle(SpriteSheetBundle {
+                //     texture_atlas: boid_texture.texture.clone(),
+                //     transform: transform,
+                //     sprite: TextureAtlasSprite::new(0),
+                //     ..Default::default()
+                // })
+                .insert(transform)
+                .insert(boid_sprite)
+                .insert(boid);
         }
     }
 }

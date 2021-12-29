@@ -1,5 +1,6 @@
 use bevy::prelude::*;
 
+use bevy_canvas::{common_shapes::*, Canvas, DrawMode};
 use rand::random;
 
 pub struct BoidPlugin;
@@ -19,6 +20,9 @@ pub struct Boid {
     max_steering: f32,
     max_speed: f32,
     seperation_vision: f32,
+
+    pub draw_base_size: f32,
+    pub draw_height_size: f32,
 }
 
 impl Boid {
@@ -31,6 +35,8 @@ impl Boid {
             max_steering: 0.2,
             max_speed: 5.0,
             seperation_vision: 75.0,
+            draw_base_size: 12.5,
+            draw_height_size: 35.0,
         }
     }
 }
@@ -166,4 +172,21 @@ fn apply_all_boid_behaviours(mut boids: Query<(&mut Boid, &Transform)>) {
             }
         }
     }
+}
+
+pub fn boid_test_trig(mut canvas: ResMut<Canvas>) {
+    // Create a shape...
+
+    let mut points = Vec::new();
+    points.push(Vec2::splat(0.0));
+    points.push(Vec2::new(50.0, 0.0));
+    points.push(Vec2::new(0.0, 50.0));
+    let square = Polygon {
+        origin: Vec2::ZERO,
+        points: points,
+        closed: true,
+    };
+
+    // ...then draw it!
+    canvas.draw(&square, DrawMode::stroke_1px(), Color::RED);
 }
