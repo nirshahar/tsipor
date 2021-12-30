@@ -39,6 +39,10 @@ impl Boid {
             draw_height_size: 35.0,
         }
     }
+
+    pub fn get_vel(&self) -> Vec2 {
+        self.vel
+    }
 }
 
 fn update_boids(mut boids: Query<(&mut Boid, &mut Transform)>, window: Res<Windows>) {
